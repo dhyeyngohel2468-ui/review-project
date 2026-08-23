@@ -68,24 +68,24 @@ st.markdown("""
                     linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
     }
 
-    /* Sidebar - Simple clean */
+    /* Sidebar - Simple dark (black background, light text) */
     section[data-testid="stSidebar"] {
-        background: #FFFFFF !important;
-        border-right: 1px solid #E2E8F0;
+        background: #0F172A !important;
+        border-right: 1px solid #1E293B;
     }
-    section[data-testid="stSidebar"] * { color: #0F172A !important; }
+    section[data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     section[data-testid="stSidebar"] .stRadio label { 
-        background: #F8FAFC !important; 
-        border: 1px solid #E2E8F0 !important;
+        background: #1E293B !important; 
+        border: 1px solid #334155 !important;
         border-radius: 8px !important; 
         padding: 8px 12px !important; 
         margin: 3px 0 !important;
         font-weight: 500 !important;
-        color: #334155 !important;
+        color: #E2E8F0 !important;
     }
     section[data-testid="stSidebar"] .stRadio label:hover {
-        background: #F1F5F9 !important;
-        border-color: #CBD5E1 !important;
+        background: #334155 !important;
+        border-color: #475569 !important;
     }
     section[data-testid="stSidebar"] [aria-checked="true"] {
         background: #6366F1 !important;
@@ -554,8 +554,8 @@ with st.sidebar:
     st.markdown("""
     <div style="text-align:center; padding: 0.8rem 0;">
         <div style="font-size:2rem;">🛡️</div>
-        <div style="font-weight:800; font-size:1.25rem; color:#0F172A;">Hybrid Review<br>Authenticity</div>
-        <div style="font-size:0.85rem; color:#64748B;">SGP • CE-B 7th Sem</div>
+        <div style="font-weight:800; font-size:1.25rem; color:#FFFFFF;">Hybrid Review<br>Authenticity</div>
+        <div style="font-size:0.85rem; color:#94A3B8;">SGP • CE-B 7th Sem</div>
     </div>
     """, unsafe_allow_html=True)
     st.divider()
@@ -627,15 +627,15 @@ if page == "🏠 Overview":
         Develop a **hybrid fake review detection system** that evaluates every review through **two independent lenses**:
 
         <div style="display:flex; gap:12px; margin:12px 0;">
-            <div style="flex:1; background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border:1px solid #C7D2FE; border-radius:12px; padding:14px;">
+            <div style="flex:1; background:#1E293B; border:1px solid #334155; border-radius:12px; padding:14px;">
                 <div style="font-size:1.3rem;">👤</div>
-                <div style="font-weight:700; color:#3730A3; font-size:0.92rem; margin:4px 0;">Reviewer Credibility</div>
-                <div style="font-size:0.84rem; color:#4338CA; line-height:1.5;">Does the <b>history</b> look like a normal member of the population?</div>
+                <div style="font-weight:700; color:#FFFFFF; font-size:0.92rem; margin:4px 0;">Reviewer Credibility</div>
+                <div style="font-size:0.84rem; color:#94A3B8; line-height:1.5;">Does the <b style="color:#E2E8F0;">history</b> look like a normal member of the population?</div>
             </div>
-            <div style="flex:1; background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%); border:1px solid #86EFAC; border-radius:12px; padding:14px;">
+            <div style="flex:1; background:#1E293B; border:1px solid #334155; border-radius:12px; padding:14px;">
                 <div style="font-size:1.3rem;">📝</div>
-                <div style="font-weight:700; color:#14532D; font-size:0.92rem; margin:4px 0;">Text Authenticity</div>
-                <div style="font-size:0.84rem; color:#166534; line-height:1.5;">Does the <b>content</b> read like a genuine human experience?</div>
+                <div style="font-weight:700; color:#FFFFFF; font-size:0.92rem; margin:4px 0;">Text Authenticity</div>
+                <div style="font-size:0.84rem; color:#94A3B8; line-height:1.5;">Does the <b style="color:#E2E8F0;">content</b> read like a genuine human experience?</div>
             </div>
         </div>
 
