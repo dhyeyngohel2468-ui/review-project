@@ -1,0 +1,18 @@
+# Hybrid Review Authenticity Detection — Streamlit Deployment
+# Tested with Python 3.10-3.13. Keep unpinned for Streamlit Cloud to resolve latest compatible.
+# For exact local reproduction, use pinned versions below (commented).
+
+streamlit
+pandas
+numpy
+scikit-learn
+matplotlib
+joblib
+
+# --- Pinned alternative (if you want exact reproducibility) ---
+# streamlit==1.54.0
+# pandas==2.3.3
+# numpy==2.2.6
+# scikit-learn==1.8.0
+# matplotlib==3.10.9
+# joblib==1.5.3
