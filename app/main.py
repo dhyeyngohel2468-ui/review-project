@@ -68,29 +68,32 @@ st.markdown("""
                     linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
     }
 
-    /* Sidebar */
+    /* Sidebar - Simple clean */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%) !important;
-        border-right: 1px solid #1E293B;
+        background: #FFFFFF !important;
+        border-right: 1px solid #E2E8F0;
     }
-    section[data-testid="stSidebar"] * { color: #E2E8F0 !important; }
+    section[data-testid="stSidebar"] * { color: #0F172A !important; }
     section[data-testid="stSidebar"] .stRadio label { 
-        background: rgba(255,255,255,0.06) !important; 
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        border-radius: 10px !important; 
-        padding: 10px 14px !important; 
-        margin: 4px 0 !important;
-        transition: all 0.2s !important;
+        background: #F8FAFC !important; 
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important; 
+        padding: 8px 12px !important; 
+        margin: 3px 0 !important;
         font-weight: 500 !important;
+        color: #334155 !important;
     }
     section[data-testid="stSidebar"] .stRadio label:hover {
-        background: rgba(255,255,255,0.10) !important;
-        transform: translateX(2px);
+        background: #F1F5F9 !important;
+        border-color: #CBD5E1 !important;
     }
     section[data-testid="stSidebar"] [aria-checked="true"] {
-        background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%) !important;
-        border-color: transparent !important;
-        box-shadow: 0 4px 12px rgba(99,102,241,0.35) !important;
+        background: #6366F1 !important;
+        border-color: #6366F1 !important;
+        color: white !important;
+    }
+    section[data-testid="stSidebar"] [aria-checked="true"] * {
+        color: white !important;
     }
 
     /* Hero header */
@@ -166,29 +169,24 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.55rem !important; font-weight: 800 !important; color: #0F172A !important; }
     div[data-testid="stMetricDelta"] { font-size: 0.82rem !important; }
 
-    /* Cards */
+    /* Cards - Simple */
     .card {
-        background: white;
-        padding: 1.35rem 1.4rem;
-        border-radius: 16px;
+        background: #FFFFFF;
+        color: #0F172A;
+        padding: 1.2rem 1.3rem;
+        border-radius: 12px;
         border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.03);
-        transition: all 0.2s;
-    }
-    .card:hover {
-        box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.05);
-        border-color: #CBD5E1;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .card-dark {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-        color: white;
-        border: 1px solid #334155;
+        background: #F8FAFC;
+        color: #0F172A;
+        border: 1px solid #E2E8F0;
     }
     .card-gradient {
-        background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #06B6D4 100%);
-        color: white;
-        border: none;
-        box-shadow: 0 8px 24px rgba(99,102,241,0.25);
+        background: #F8FAFC;
+        color: #0F172A;
+        border: 1px solid #E2E8F0;
     }
 
     /* Badges */
@@ -560,15 +558,6 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.divider()
-    st.markdown("**Team**")
-    st.markdown("""
-    - Dhyey Gohel — IU2341050162  
-    - Shrey Chauhan — IU2341050142  
-    - Nimesh Panchal — IU2341050165  
-    - Kirtisinh Rajput — IU2341050155  
-    _Indus University_
-    """)
-    st.divider()
     # Model health
     st.markdown("**System Status**")
     if behav_err:
@@ -683,35 +672,35 @@ if page == "🏠 Overview":
     with right:
         st.markdown('<div class="section-label">● HOW IT WORKS</div>', unsafe_allow_html=True)
         st.markdown("""
-        <div class="card" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); color: white; border: none; padding: 1.4rem;">
-            <div style="font-weight:800; font-size:1.05rem; margin-bottom:12px; display:flex; align-items:center; gap:8px;">⚡ Three Signals, One Verdict</div>
-            <div style="display:flex; align-items:center; gap:12px; margin:12px 0;">
-                <div style="background: rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.3); width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">👤</div>
+        <div class="card" style="padding: 1.2rem;">
+            <div style="font-weight:700; font-size:1rem; margin-bottom:10px; color:#0F172A;">⚡ Three Signals, One Verdict</div>
+            <div style="display:flex; align-items:center; gap:10px; margin:8px 0;">
+                <div style="background:#EEF2FF; border:1px solid #C7D2FE; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">👤</div>
                 <div style="flex:1;">
-                    <div style="font-weight:700; font-size:0.92rem;">Behavioral</div>
-                    <div style="font-size:0.82rem; color:#94A3B8;">7 features · burst-centric · 0–100</div>
+                    <div style="font-weight:600; font-size:0.9rem; color:#0F172A;">Behavioral</div>
+                    <div style="font-size:0.8rem; color:#64748B;">7 features · burst-centric · 0–100</div>
                 </div>
-                <div style="color:#A5B4FC; font-weight:800;">→</div>
+                <div style="color:#6366F1; font-weight:700;">→</div>
             </div>
-            <div style="display:flex; align-items:center; gap:12px; margin:12px 0;">
-                <div style="background: rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.25); width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">📝</div>
+            <div style="display:flex; align-items:center; gap:10px; margin:8px 0;">
+                <div style="background:#F0FDF4; border:1px solid #BBF7D0; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">📝</div>
                 <div style="flex:1;">
-                    <div style="font-weight:700; font-size:0.92rem;">Textual</div>
-                    <div style="font-size:0.82rem; color:#94A3B8;">TF-IDF · LogReg · 0–100</div>
+                    <div style="font-weight:600; font-size:0.9rem; color:#0F172A;">Textual</div>
+                    <div style="font-size:0.8rem; color:#64748B;">TF-IDF · LogReg · 0–100</div>
                 </div>
-                <div style="color:#6EE7B7; font-weight:800;">→</div>
+                <div style="color:#16A34A; font-weight:700;">→</div>
             </div>
-            <div style="display:flex; align-items:center; gap:12px; margin:12px 0;">
-                <div style="background: rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.3); width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">⚖️</div>
+            <div style="display:flex; align-items:center; gap:10px; margin:8px 0;">
+                <div style="background:#F5F3FF; border:1px solid #DDD6FE; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">⚖️</div>
                 <div style="flex:1;">
-                    <div style="font-weight:700; font-size:0.92rem;">Decision Engine</div>
-                    <div style="font-size:0.82rem; color:#94A3B8;">wB·Behavior + wT·Text + explanation</div>
+                    <div style="font-weight:600; font-size:0.9rem; color:#0F172A;">Decision Engine</div>
+                    <div style="font-size:0.8rem; color:#64748B;">wB·Behavior + wT·Text + explanation</div>
                 </div>
-                <div style="color:#C4B5FD; font-weight:800;">→</div>
+                <div style="color:#8B5CF6; font-weight:700;">→</div>
             </div>
-            <div style="background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.10); border-radius:12px; padding:12px; margin-top:14px; text-align:center;">
-                <div style="font-weight:800; font-size:1.15rem; color:#FDE68A;">Final Authenticity Score</div>
-                <div style="font-size:0.8rem; color:#CBD5E1;">plus per-signal status & reasoning</div>
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:10px; margin-top:10px; text-align:center;">
+                <div style="font-weight:700; font-size:1rem; color:#0F172A;">Final Authenticity Score</div>
+                <div style="font-size:0.8rem; color:#64748B;">plus per-signal status & reasoning</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -750,8 +739,9 @@ if page == "🏠 Overview":
 # ──────────────────────────────────────────────
 elif page == "🏗️ Architecture":
     st.markdown("### 🏗️ Hybrid System Architecture")
-    col_a, col_b = st.columns([1.15, 0.85], gap="large")
-    with col_a:
+    st.markdown("The system checks a review in two separate ways — history and text — then combines results.")
+    _, center, _ = st.columns([1, 6, 1])
+    with center:
         st.graphviz_chart("""
         digraph G {
             rankdir=TB; bgcolor="transparent"; node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];
@@ -775,23 +765,11 @@ elif page == "🏗️ Architecture":
             engine -> final -> ui;
         }
         """)
-        st.markdown("#### Scalable Flow (future)")
-        st.code("""
-USER enters review + reviewerID
-          │
-          ├─► Retrieve history ─► Feature Eng (7) ─► scaler.transform ─► isolation_forest.predict/decision_function ─► score_scaler ─► Behavior Score
-          │
-          └─► Current text ─► preprocessing ─► TF-IDF ─► nlp_model.predict_proba ─► Text Authenticity Score
-                                             │
-                              ┌──────────────┴──────────────┐
-                              ▼                             ▼
-                        Decision Engine (weighted, explainable)
-                              │
-                              ▼
-                        Final Score + Status + Explanation
-        """, language="text")
+        st.caption("Flow: Review → Behavioral path and Text path → Decision Engine → Final Score (centered diagram above)")
 
-    with col_b:
+    st.divider()
+    c1, c2 = st.columns(2, gap="large")
+    with c1:
         st.markdown("#### Behavioral vs Text")
         st.markdown("""
         | Aspect | Behavioral | NLP |
@@ -812,18 +790,17 @@ USER enters review + reviewerID
         4. **Scale mismatch** → both scores normalized to 0–100, same direction (100 = authentic).  
         5. **Cold-start** → if `total_reviews <3`, mark Behavior unavailable; engine falls back to text-only and UI says so explicitly.
         """)
-        st.markdown("#### Saved Artifacts (3 .pkl)")
+    with c2:
+        st.markdown("#### Saved Artifacts")
         st.markdown("""
-        ```text
-        models/
-        ├── scaler.pkl            → StandardScaler (7 features, fitted)
-        ├── isolation_forest.pkl  → IsolationForest(n_estimators=200, contamination=0.02)
-        └── score_scaler.pkl      → MinMaxScaler(0,100) for decision_function → Behavior Score
-        models/
-        ├── tfidf_vectorizer.pkl  → TfidfVectorizer (5000, 1-2gram)
-        └── nlp_model.pkl         → LogisticRegression (best of 3, demo trained)
-        ```
-        **Inference rule:** `scaler.transform` (never `fit_transform` at inference) → `iso.decision_function` → `score_scaler.transform` → 0–100.
+        Simple files saved in `models/`:
+        - `scaler.pkl` → StandardScaler (7 features)
+        - `isolation_forest.pkl` → IsolationForest (200 trees, c=0.02)
+        - `score_scaler.pkl` → MinMaxScaler 0–100
+        - `tfidf_vectorizer.pkl` → TF-IDF 5000, 1–2 gram
+        - `nlp_model.pkl` → LogisticRegression
+
+        *Inference:* `scaler.transform` → `decision_function` → `score_scaler` → 0–100
         """)
     st.divider()
     st.markdown("#### Four Canonical Cases (Decision Engine)")
