@@ -54,18 +54,21 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
 
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #E2E8F0; }
+    h1, h2, h3 { color: #FFFFFF !important; }
+    h3 { font-family: 'Plus Jakarta Sans', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; color: #FFFFFF !important; }
     
     /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* App background */
+    /* App background - Dark */
     .stApp {
-        background: radial-gradient(1200px 600px at 10% -10%, #EEF2FF 0%, transparent 60%),
-                    radial-gradient(1000px 500px at 90% 0%, #F0FDFA 0%, transparent 60%),
-                    linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+        background: radial-gradient(1200px 600px at 10% -10%, #1E293B 0%, transparent 60%),
+                    radial-gradient(1000px 500px at 90% 0%, #1E1B4B 0%, transparent 60%),
+                    linear-gradient(180deg, #020617 0%, #0F172A 100%);
+        color: #E2E8F0;
     }
 
     /* Sidebar - Simple dark (black background, light text) */
@@ -153,44 +156,44 @@ st.markdown("""
 
     /* Metric cards - Dark */
     div[data-testid="stMetric"] {
-        background: #0F172A;
-        border: 1px solid #1E293B;
+        background: #1E293B;
+        border: 1px solid #334155;
         border-radius: 12px;
         padding: 16px 18px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     }
     div[data-testid="stMetricLabel"] { font-size: 0.78rem !important; font-weight: 600 !important; letter-spacing: 0.04em; text-transform: uppercase; color: #94A3B8 !important; }
     div[data-testid="stMetricValue"] { font-size: 1.55rem !important; font-weight: 800 !important; color: #FFFFFF !important; }
     div[data-testid="stMetricDelta"] { font-size: 0.82rem !important; color: #CBD5E1 !important; }
 
-    /* Cards - Dark (black background, visible light text) */
+    /* Cards - Dark (visible on dark app) */
     .card {
-        background: #0F172A;
+        background: #1E293B;
         color: #E2E8F0;
         padding: 1.2rem 1.3rem;
         border-radius: 12px;
-        border: 1px solid #1E293B;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        border: 1px solid #334155;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     }
     .card b, .card strong {
         color: #FFFFFF;
     }
     .card code {
-        background: #1E293B;
+        background: #0F172A;
         color: #93C5FD;
         border: 1px solid #334155;
         padding: 1px 4px;
         border-radius: 4px;
     }
     .card-dark {
-        background: #0F172A;
+        background: #1E293B;
         color: #E2E8F0;
-        border: 1px solid #1E293B;
+        border: 1px solid #334155;
     }
     .card-gradient {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+        background: #1E293B;
         color: #E2E8F0;
-        border: 1px solid #1E293B;
+        border: 1px solid #334155;
     }
 
     /* Badges */
