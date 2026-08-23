@@ -59,10 +59,18 @@ st.markdown("""
     h3 { font-family: 'Plus Jakarta Sans', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; color: #FFFFFF !important; }
     h4 { color: #FFFFFF !important; }
     
-    /* Hide Streamlit branding */
+    /* Hide Streamlit branding but keep sidebar toggle visible */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    header {visibility: visible; background: transparent !important;}
+    [data-testid="stHeader"] {background: transparent !important;}
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    button[data-testid="collapsedControl"] {
+        visibility: visible !important;
+        display: flex !important;
+        color: #E2E8F0 !important;
+    }
 
     /* App background - Dark */
     .stApp {
