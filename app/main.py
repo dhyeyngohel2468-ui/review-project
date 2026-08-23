@@ -55,8 +55,9 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
 
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #E2E8F0; }
-    h1, h2, h3 { color: #FFFFFF !important; }
+    h1, h2, h3, h4, h5, h6 { color: #FFFFFF !important; }
     h3 { font-family: 'Plus Jakarta Sans', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; color: #FFFFFF !important; }
+    h4 { color: #FFFFFF !important; }
     
     /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
@@ -255,7 +256,7 @@ st.markdown("""
         color: #6366F1; background: #EEF2FF; border: 1px solid #C7D2FE;
         padding: 5px 10px; border-radius: 999px; margin-bottom: 8px;
     }
-    h3 { font-family: 'Plus Jakarta Sans', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; color: #0F172A !important; }
+    h3 { font-family: 'Plus Jakarta Sans', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; color: #FFFFFF !important; }
 
     /* Buttons */
     .stButton > button {
@@ -295,8 +296,8 @@ st.markdown("""
     /* Progress */
     .stProgress > div > div > div > div { background: linear-gradient(90deg, #6366F1 0%, #06B6D4 100%) !important; }
 
-    /* Expander */
-    .streamlit-expanderHeader { font-weight: 600 !important; color: #0F172A !important; }
+    /* Expander - visible on dark */
+    .streamlit-expanderHeader { font-weight: 600 !important; color: #E2E8F0 !important; }
 
     /* Divider */
     hr { border-color: #E2E8F0 !important; opacity: 0.6; }
@@ -1295,14 +1296,14 @@ elif page == "🔍 Hybrid Detection":
             st.markdown("**Behavior Analysis**")
             if behavior_score is None:
                 st.markdown('<span class="badge badge-gray">Unavailable — insufficient history</span>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:2rem; font-weight:800; color:#64748B;">—</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:2rem; font-weight:800; color:#94A3B8;">—</div>', unsafe_allow_html=True)
                 st.caption("No behavioral score (cold-start). UI should say so rather than fabricating values. Engine falls back to text-only if available.")
                 if behav_detail:
                     st.json(behav_detail)
             else:
                 b_status, b_cls = get_behavior_status(behavior_score)
                 st.markdown(f'<span class="badge {b_cls}">{b_status}</span>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:2.2rem; font-weight:800; color:#0F172A;">{behavior_score:.1f} <span style="font-size:1rem; color:#64748B;">/ 100</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:2.2rem; font-weight:800; color:#FFFFFF;">{behavior_score:.1f} <span style="font-size:1rem; color:#94A3B8;">/ 100</span></div>', unsafe_allow_html=True)
                 st.progress(int(np.clip(behavior_score,0,100))/100)
                 st.caption(f"prediction={behav_detail['prediction']} (1=normal, -1=anomaly) • decision={behav_detail['decision_score']:.4f}")
                 st.markdown(f'<div class="insight-box" style="font-size:0.9rem;">High = normal behavior. This is <b>not</b> P(fake). Method: Isolation Forest decision_function → MinMax(0,100).</div>', unsafe_allow_html=True)
@@ -1313,27 +1314,27 @@ elif page == "🔍 Hybrid Detection":
             st.markdown("**Text Analysis**")
             if text_score is None:
                 st.markdown('<span class="badge badge-gray">No text provided</span>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:2rem; font-weight:800; color:#64748B;">—</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:2rem; font-weight:800; color:#94A3B8;">—</div>', unsafe_allow_html=True)
                 st.caption("Enter review text to get Text Authenticity Score.")
             else:
                 t_status, t_cls = get_text_status(text_score)
                 st.markdown(f'<span class="badge {t_cls}">{t_status} • {text_label}</span>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:2.2rem; font-weight:800; color:#0F172A;">{text_score:.1f} <span style="font-size:1rem; color:#64748B;">/ 100</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:2.2rem; font-weight:800; color:#FFFFFF;">{text_score:.1f} <span style="font-size:1rem; color:#94A3B8;">/ 100</span></div>', unsafe_allow_html=True)
                 st.progress(int(np.clip(text_score,0,100))/100)
                 st.caption(f"P(genuine)={text_proba:.3f} • TF-IDF + LogisticRegression")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with r3:
-            st.markdown('<div class="card" style="border: 2px solid #0F172A;">', unsafe_allow_html=True)
+            st.markdown('<div class="card" style="border: 2px solid #334155;">', unsafe_allow_html=True)
             st.markdown("**Final Assessment**")
             if final_score is None:
                 st.markdown('<span class="badge badge-gray">Insufficient data</span>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:2rem; font-weight:800; color:#64748B;">—</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:2rem; font-weight:800; color:#94A3B8;">—</div>', unsafe_allow_html=True)
                 st.caption("Need at least one signal.")
             else:
                 o_status, o_cls = get_overall_status(final_score)
                 st.markdown(f'<span class="badge {o_cls}">{o_status}</span>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:2.4rem; font-weight:900; color:#0F172A;">{final_score:.1f} <span style="font-size:1rem; color:#64748B;">/ 100</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:2.4rem; font-weight:900; color:#FFFFFF;">{final_score:.1f} <span style="font-size:1rem; color:#94A3B8;">/ 100</span></div>', unsafe_allow_html=True)
                 st.progress(int(np.clip(final_score,0,100))/100)
                 if behavior_score is not None and text_score is not None:
                     st.caption(f"Final = {w_b:.2f}×{behavior_score:.1f} + {w_t:.2f}×{text_score:.1f}")
@@ -1342,7 +1343,7 @@ elif page == "🔍 Hybrid Detection":
                 else:
                     st.caption("Final = Text only (behavior unavailable / cold-start)")
                 # Avoid hard threshold
-                st.markdown('<div style="font-size:0.85rem; color:#64748B; margin-top:0.5rem;">Prototype thresholds: ≥75 likely genuine, 55–75 mixed, 30–55 suspicious, &lt;30 highly suspicious. Validate on labeled data before claiming optimality. Avoid <code>if &gt;50: genuine else fake</code> as final.</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:0.85rem; color:#94A3B8; margin-top:0.5rem;">Prototype thresholds: ≥75 likely genuine, 55–75 mixed, 30–55 suspicious, &lt;30 highly suspicious. Validate on labeled data before claiming optimality. Avoid <code>if &gt;50: genuine else fake</code> as final.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         # Explanation
@@ -1480,7 +1481,7 @@ elif page == "🔎 Reviewer Lookup":
 # ──────────────────────────────────────────────
 st.divider()
 st.markdown("""
-<div style="text-align:center; color:#64748B; font-size:0.85rem; padding: 0.5rem 0 1rem 0;">
+<div style="text-align:center; color:#94A3B8; font-size:0.85rem; padding: 0.5rem 0 1rem 0;">
     Hybrid Review Authenticity Detection System • Behavioral (Isolation Forest, unsupervised) + NLP (TF-IDF + LogReg, supervised) + Decision Engine • Streamlit • Indus University<br>
     <i>Behavior Score: high = normal (not P(fake)). &nbsp;|&nbsp; Text Score: high = likely genuine. &nbsp;|&nbsp; Final = wB·Behavior + wT·Text. &nbsp;|&nbsp; Cold-start: behavior unavailable if total_reviews &lt;3.</i>
 </div>
