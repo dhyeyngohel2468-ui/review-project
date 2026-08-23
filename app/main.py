@@ -151,42 +151,46 @@ st.markdown("""
     .hero-stat-label { color: #94A3B8; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
     .hero-stat-value { color: white; font-size: 0.95rem; font-weight: 700; }
 
-    /* Metric cards */
+    /* Metric cards - Dark */
     div[data-testid="stMetric"] {
-        background: white;
-        border: 1px solid #E2E8F0;
-        border-radius: 16px;
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 12px;
         padding: 16px 18px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
-        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     }
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
-        border-color: #CBD5E1;
-    }
-    div[data-testid="stMetricLabel"] { font-size: 0.78rem !important; font-weight: 600 !important; letter-spacing: 0.04em; text-transform: uppercase; color: #64748B !important; }
-    div[data-testid="stMetricValue"] { font-size: 1.55rem !important; font-weight: 800 !important; color: #0F172A !important; }
-    div[data-testid="stMetricDelta"] { font-size: 0.82rem !important; }
+    div[data-testid="stMetricLabel"] { font-size: 0.78rem !important; font-weight: 600 !important; letter-spacing: 0.04em; text-transform: uppercase; color: #94A3B8 !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.55rem !important; font-weight: 800 !important; color: #FFFFFF !important; }
+    div[data-testid="stMetricDelta"] { font-size: 0.82rem !important; color: #CBD5E1 !important; }
 
-    /* Cards - Simple */
+    /* Cards - Dark (black background, visible light text) */
     .card {
-        background: #FFFFFF;
-        color: #0F172A;
+        background: #0F172A;
+        color: #E2E8F0;
         padding: 1.2rem 1.3rem;
         border-radius: 12px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        border: 1px solid #1E293B;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .card b, .card strong {
+        color: #FFFFFF;
+    }
+    .card code {
+        background: #1E293B;
+        color: #93C5FD;
+        border: 1px solid #334155;
+        padding: 1px 4px;
+        border-radius: 4px;
     }
     .card-dark {
-        background: #F8FAFC;
-        color: #0F172A;
-        border: 1px solid #E2E8F0;
+        background: #0F172A;
+        color: #E2E8F0;
+        border: 1px solid #1E293B;
     }
     .card-gradient {
-        background: #F8FAFC;
-        color: #0F172A;
-        border: 1px solid #E2E8F0;
+        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+        color: #E2E8F0;
+        border: 1px solid #1E293B;
     }
 
     /* Badges */
@@ -198,33 +202,36 @@ st.markdown("""
     .badge-gray { background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; }
     .badge-indigo { background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; }
 
-    /* Insight / Warning boxes */
+    /* Insight / Warning boxes - Dark */
     .insight-box {
-        background: linear-gradient(135deg, #F0F9FF 0%, #EEF2FF 100%);
-        border: 1px solid #C7D2FE;
+        background: #1E293B;
+        border: 1px solid #334155;
         border-left: 4px solid #6366F1;
         padding: 0.9rem 1.1rem;
         border-radius: 0 12px 12px 0;
         margin: 0.7rem 0;
         font-size: 0.92rem;
         line-height: 1.6;
-        color: #1E293B;
+        color: #E2E8F0;
     }
+    .insight-box b, .insight-box strong { color: #FFFFFF; }
     .warning-box {
-        background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
-        border: 1px solid #FDE68A;
+        background: #1E293B;
+        border: 1px solid #334155;
         border-left: 4px solid #F59E0B;
         padding: 0.9rem 1.1rem;
         border-radius: 0 12px 12px 0;
         font-size: 0.92rem;
         line-height: 1.6;
+        color: #FDE68A;
     }
     .success-box {
-        background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
-        border: 1px solid #86EFAC;
+        background: #1E293B;
+        border: 1px solid #334155;
         border-left: 4px solid #22C55E;
         padding: 0.9rem 1.1rem;
         border-radius: 0 12px 12px 0;
+        color: #86EFAC;
     }
 
     /* Feature pills */
@@ -650,7 +657,7 @@ if page == "🏠 Overview":
             <span style="background:#DBEAFE; color:#2563EB; width:28px; height:28px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:0.85rem; flex-shrink:0;">3</span>
             <div><b>Behavior-only is blind</b> to sophisticated fake text from otherwise normal accounts.</div>
         </div>
-        <div style="margin-top:10px; background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:10px; padding:10px 14px; font-weight:600; color:#0F172A; text-align:center;">→ Need: hybrid that separates history from content and <span style="color:#6366F1;">explains disagreement</span></div>
+        <div style="margin-top:10px; background:#1E293B; border:1px solid #334155; border-radius:10px; padding:10px 14px; font-weight:600; color:#E2E8F0; text-align:center;">→ Need: hybrid that separates history from content and <span style="color:#93C5FD;">explains disagreement</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -673,41 +680,41 @@ if page == "🏠 Overview":
         st.markdown('<div class="section-label">● HOW IT WORKS</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="card" style="padding: 1.2rem;">
-            <div style="font-weight:700; font-size:1rem; margin-bottom:10px; color:#0F172A;">⚡ Three Signals, One Verdict</div>
+            <div style="font-weight:700; font-size:1rem; margin-bottom:10px; color:#FFFFFF;">⚡ Three Signals, One Verdict</div>
             <div style="display:flex; align-items:center; gap:10px; margin:8px 0;">
-                <div style="background:#EEF2FF; border:1px solid #C7D2FE; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">👤</div>
+                <div style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">👤</div>
                 <div style="flex:1;">
-                    <div style="font-weight:600; font-size:0.9rem; color:#0F172A;">Behavioral</div>
-                    <div style="font-size:0.8rem; color:#64748B;">7 features · burst-centric · 0–100</div>
+                    <div style="font-weight:600; font-size:0.9rem; color:#FFFFFF;">Behavioral</div>
+                    <div style="font-size:0.8rem; color:#94A3B8;">7 features · burst-centric · 0–100</div>
                 </div>
-                <div style="color:#6366F1; font-weight:700;">→</div>
+                <div style="color:#A5B4FC; font-weight:700;">→</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px; margin:8px 0;">
-                <div style="background:#F0FDF4; border:1px solid #BBF7D0; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">📝</div>
+                <div style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">📝</div>
                 <div style="flex:1;">
-                    <div style="font-weight:600; font-size:0.9rem; color:#0F172A;">Textual</div>
-                    <div style="font-size:0.8rem; color:#64748B;">TF-IDF · LogReg · 0–100</div>
+                    <div style="font-weight:600; font-size:0.9rem; color:#FFFFFF;">Textual</div>
+                    <div style="font-size:0.8rem; color:#94A3B8;">TF-IDF · LogReg · 0–100</div>
                 </div>
-                <div style="color:#16A34A; font-weight:700;">→</div>
+                <div style="color:#6EE7B7; font-weight:700;">→</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px; margin:8px 0;">
-                <div style="background:#F5F3FF; border:1px solid #DDD6FE; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">⚖️</div>
+                <div style="background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.3); width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">⚖️</div>
                 <div style="flex:1;">
-                    <div style="font-weight:600; font-size:0.9rem; color:#0F172A;">Decision Engine</div>
-                    <div style="font-size:0.8rem; color:#64748B;">wB·Behavior + wT·Text + explanation</div>
+                    <div style="font-weight:600; font-size:0.9rem; color:#FFFFFF;">Decision Engine</div>
+                    <div style="font-size:0.8rem; color:#94A3B8;">wB·Behavior + wT·Text + explanation</div>
                 </div>
-                <div style="color:#8B5CF6; font-weight:700;">→</div>
+                <div style="color:#C4B5FD; font-weight:700;">→</div>
             </div>
-            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:10px; margin-top:10px; text-align:center;">
-                <div style="font-weight:700; font-size:1rem; color:#0F172A;">Final Authenticity Score</div>
-                <div style="font-size:0.8rem; color:#64748B;">plus per-signal status & reasoning</div>
+            <div style="background:#1E293B; border:1px solid #334155; border-radius:8px; padding:10px; margin-top:10px; text-align:center;">
+                <div style="font-weight:700; font-size:1rem; color:#FDE68A;">Final Authenticity Score</div>
+                <div style="font-size:0.8rem; color:#CBD5E1;">plus per-signal status & reasoning</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown("""
         <div class="card" style="margin-top:14px;">
-            <div style="font-weight:800; color:#0F172A; margin-bottom:10px; display:flex; align-items:center; gap:8px;">🧬 The 7 Behavioral Features</div>
+            <div style="font-weight:800; color:#FFFFFF; margin-bottom:10px; display:flex; align-items:center; gap:8px;">🧬 The 7 Behavioral Features</div>
             <div style="display:flex; flex-wrap:wrap; gap:6px;">
                 <span class="feature-pill"><span class="feature-pill-dot" style="background:#6366F1;"></span> rating_variance</span>
                 <span class="feature-pill"><span class="feature-pill-dot" style="background:#6366F1;"></span> rating_entropy</span>
@@ -717,19 +724,19 @@ if page == "🏠 Overview":
                 <span class="feature-pill"><span class="feature-pill-dot" style="background:#8B5CF6;"></span> avg_days_between</span>
                 <span class="feature-pill"><span class="feature-pill-dot" style="background:#EF4444;"></span> burst_intensity</span>
             </div>
-            <div style="margin-top:10px; font-size:0.82rem; color:#64748B; background:#F8FAFC; border-radius:10px; padding:8px 10px; border:1px solid #F1F5F9;">
-                <b style="color:#0F172A;">Burst is the hero:</b> <code>burst_7d</code> (max in 7 days) × <code>burst_ratio</code> (share of history) = <code>burst_intensity</code> — size × dominance.
+            <div style="margin-top:10px; font-size:0.82rem; color:#94A3B8; background:#1E293B; border-radius:8px; padding:8px 10px; border:1px solid #334155;">
+                <b style="color:#FFFFFF;">Burst is the hero:</b> <code>burst_7d</code> (max in 7 days) × <code>burst_ratio</code> (share of history) = <code>burst_intensity</code> — size × dominance.
             </div>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown("""
-        <div class="card" style="margin-top:14px; background: linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%); border: 1px solid #C7D2FE;">
-            <div style="font-weight:800; color:#3730A3; margin-bottom:6px;">💎 Why Hybrid Wins</div>
-            <div style="font-size:0.88rem; color:#334155; line-height:1.6;">
-                <span style="color:#16A34A;">✔</span> Catches <b>bursty</b> reviewers even when text looks genuine<br>
-                <span style="color:#16A34A;">✔</span> Catches <b>polished fake text</b> even from normal history<br>
-                <span style="color:#16A34A;">✔</span> <b>Explains conflict</b> instead of blindly calling “fake”
+        <div class="card" style="margin-top:14px;">
+            <div style="font-weight:800; color:#FFFFFF; margin-bottom:6px;">💎 Why Hybrid Wins</div>
+            <div style="font-size:0.88rem; color:#CBD5E1; line-height:1.6;">
+                <span style="color:#34D399;">✔</span> Catches <b style="color:#FFFFFF;">bursty</b> reviewers even when text looks genuine<br>
+                <span style="color:#34D399;">✔</span> Catches <b style="color:#FFFFFF;">polished fake text</b> even from normal history<br>
+                <span style="color:#34D399;">✔</span> <b style="color:#FFFFFF;">Explains conflict</b> instead of blindly calling “fake”
             </div>
         </div>
         """, unsafe_allow_html=True)
