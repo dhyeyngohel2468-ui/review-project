@@ -42,10 +42,13 @@ APP_DIR = Path(__file__).parent
 PROJECT_ROOT = APP_DIR.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 DATASET_PATH = PROJECT_ROOT / "Dataset" / "reviewer_dataset.csv"
+REVIEWS_PATH = PROJECT_ROOT / "Dataset" / "Amazon_Reviews_Combined_2000-2023.csv"
 BEHAVIOUR_SCORE_PATH = PROJECT_ROOT / "Outputs" / "Behaviour Score.csv"
 EDA_PLOTS_DIR = PROJECT_ROOT / "EDA_Plots"
 NLP_MODEL_PATH = MODELS_DIR / "nlp_model.pkl"
 TFIDF_PATH = MODELS_DIR / "tfidf_vectorizer.pkl"
+RATING_OPTIONS = ["All ratings"] + [f"{n}★ only" for n in (5, 4, 3, 2, 1)]
+REVIEW_OPTIONS_CAP = 500
 
 # ──────────────────────────────────────────────
 # Custom CSS — Premium Polished UI
@@ -304,6 +307,19 @@ st.markdown("""
     /* Progress */
     .stProgress > div > div > div > div { background: linear-gradient(90deg, #6366F1 0%, #06B6D4 100%) !important; }
 
+    /* Score circle (dark) */
+    .score-circle {
+        width: 172px; height: 172px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; flex-direction: column;
+        margin: 0 auto; border: 10px solid; background: #1E293B;
+    }
+    .score-circle .num { font-size: 2.4rem; font-weight: 900; line-height: 1; }
+    .score-circle .lbl { font-size: 0.8rem; color: #94A3B8; margin-top: 4px; }
+
+    /* Analysis chips */
+    .chip { display:inline-block; background:#1E293B; border:1px solid #334155; border-radius:10px; padding:6px 10px; margin:3px; font-size:0.85rem; color:#E2E8F0; }
+    .chip b { color:#FFFFFF; }
+
     /* Expander - visible on dark */
     .streamlit-expanderHeader { font-weight: 600 !important; color: #E2E8F0 !important; }
 
@@ -500,6 +516,283 @@ def score_text(text: str, nlp_model, vectorizer):
     except Exception as e:
         return None, None, str(e)
 
+# ──────────────────────────────────────────────
+# Dataset-driven review analysis
+# ──────────────────────────────────────────────
+@st.cache_data(show_spinner="Loading 106k-review dataset…")
+def load_reviews():
+    """Raw per-review rows from the combined Amazon dataset (2000–2023)."""
+    if not REVIEWS_PATH.exists():
+        return None
+    df = pd.read_csv(
+        REVIEWS_PATH,
+        usecols=["reviewerID", "asin", "reviewerName", "helpful", "overall",
+                 "summary", "reviewText", "unixReviewTime", "reviewTime"],
+    )
+    df["reviewText"] = df["reviewText"].fillna("").astype(str)
+    df["summary"] = df["summary"].fillna("").astype(str)
+    df["reviewerName"] = df["reviewerName"].fillna("Anonymous").astype(str)
+    # reviewTime in this corpus is "12 3, 2009" — rebuild a clean date from the unix timestamp.
+    stamp = pd.to_datetime(df["unixReviewTime"], unit="s", errors="coerce")
+    df["reviewDate"] = stamp.dt.strftime("%d %b %Y")
+    df["reviewDate"] = df["reviewDate"].fillna(df["reviewTime"].astype(str).str.strip())
+    votes = df["helpful"].astype(str).str.extract(r"\[\s*(\d+)\s*,\s*(\d+)\s*\]")
+    df["helpful_votes"] = pd.to_numeric(votes[0], errors="coerce").fillna(0).astype(int)
+    df["helpful_total"] = pd.to_numeric(votes[1], errors="coerce").fillna(0).astype(int)
+    df = df[df["reviewText"].str.strip().str.len() > 0].reset_index(drop=True)
+    df["rid"] = df.index
+    return df
+
+
+def build_population_stats(reviewer_df):
+    """Sorted values of the modeled population (total_reviews >= 3) so a reviewer's
+    feature can be reported as a percentile instead of a bare number."""
+    modeled = reviewer_df[reviewer_df["total_reviews"] >= 3]
+    cols = {
+        "rating_variance": modeled["rating_variance"].to_numpy(float),
+        "rating_entropy": modeled["rating_entropy"].to_numpy(float),
+        "reviews_per_day": modeled["reviews/day"].to_numpy(float),
+        "review_burst_7d": modeled["review_burst_7d"].to_numpy(float),
+        "burst_ratio_7d": modeled["burst_ratio_7d"].to_numpy(float),
+        "avg_days_between_reviews": modeled["avg_days_between_reviews"].to_numpy(float),
+        "total_reviews": modeled["total_reviews"].to_numpy(float),
+    }
+    return {k: np.sort(v) for k, v in cols.items()}
+
+
+def percentile_of(value, sorted_arr):
+    """Share of the modeled population at or below `value`, in %."""
+    if sorted_arr is None or len(sorted_arr) == 0:
+        return None
+    return float(np.searchsorted(sorted_arr, value, side="right") / len(sorted_arr) * 100)
+
+
+def reviewer_features(row):
+    """The 7 raw features Isolation Forest expects, straight from reviewer_dataset.csv."""
+    burst_7d = float(row["review_burst_7d"])
+    ratio = float(row["burst_ratio_7d"])
+    return {
+        "rating_variance": float(row["rating_variance"]),
+        "rating_entropy": float(row["rating_entropy"]),
+        "reviews_per_day": float(row["reviews/day"]),
+        "review_burst_7d": int(burst_7d),
+        "burst_ratio_7d": ratio,
+        "avg_days_between_reviews": float(row["avg_days_between_reviews"]),
+        "burst_intensity": burst_7d * ratio,
+    }
+
+
+GENERIC_PRAISE = ["amazing", "excellent", "wonderful", "perfect", "fantastic", "superb",
+                  "best", "love it", "highly recommend", "five stars", "must have",
+                  "top quality", "great product", "absolutely"]
+INCENTIVE_PHRASES = ["in exchange for", "free copy", "received this product for free",
+                     "received a free", "complimentary copy", "for an honest review",
+                     "given to me for free", "in return for my honest"]
+POSITIVE_WORDS = {"good", "great", "love", "excellent", "nice", "happy", "easy", "perfect",
+                  "recommend", "solid", "worth", "comfortable", "fast", "durable", "best"}
+NEGATIVE_WORDS = {"bad", "poor", "terrible", "broken", "waste", "disappointed", "cheap",
+                  "issue", "problem", "failed", "stopped", "difficult", "return", "worst",
+                  "flimsy", "unhappy", "damaged", "late", "overpriced"}
+STOPWORDS = set("""a an the and or but if then than that this these those i you he she it we they
+be been being am is are was were do does did done have has had having of in on at to for from by
+with without about into over under very so too also not no nor my your his her its our their me him
+them us as up down out off more most other some any all each every will would can could shall should
+may might must since because while when where how what which who whom whose yes really just got get
+even still yet though although though own same such only own s t re ve ll d m""".split())
+
+
+def analyze_text_signals(text):
+    """Transparent linguistic markers. These justify the model's Text Score — they do not
+    compute it, so the score always stays the classifier's own output."""
+    low = text.lower()
+    tokens = [t for t in "".join(c if c.isalnum() else " " for c in low).split()]
+    words = [t for t in tokens if not t.isdigit()]
+    informative = [t for t in words if t not in STOPWORDS and len(t) > 2]
+
+    n_words = max(len(words), 1)
+    exclaim = text.count("!")
+    caps_words = 0
+    for w in text.split():
+        letters = "".join(c for c in w if c.isalpha())
+        if len(letters) > 2 and letters.isupper():
+            caps_words += 1
+    generic_hits = sum(low.count(p) for p in GENERIC_PRAISE)
+    incentive_hit = next((p for p in INCENTIVE_PHRASES if p in low), None)
+    pos_hits = sum(1 for t in words if t in POSITIVE_WORDS)
+    neg_hits = sum(1 for t in words if t in NEGATIVE_WORDS)
+    uniq_share = len(set(informative)) / max(len(informative), 1)
+
+    freq = {}
+    for t in informative:
+        freq[t] = freq.get(t, 0) + 1
+    keywords = [w for w, _ in sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))[:8]]
+
+    if pos_hits > neg_hits:
+        sentiment = "Positive"
+    elif neg_hits > pos_hits:
+        sentiment = "Negative"
+    else:
+        sentiment = "Neutral / mixed"
+
+    chips = []
+    if incentive_hit:
+        chips.append((f'Incentive phrase: “{incentive_hit}”', "red"))
+    if generic_hits >= 3:
+        chips.append((f"Generic praise ×{generic_hits}", "red"))
+    elif generic_hits >= 1:
+        chips.append((f"Generic praise ×{generic_hits}", "yellow"))
+    if exclaim / n_words > 0.05 and exclaim >= 2:
+        chips.append((f"High exclamation density ({exclaim} '!')", "red"))
+    if caps_words >= 3:
+        chips.append((f"{caps_words} capitalized words", "yellow"))
+    if len(informative) >= 8 and uniq_share < 0.55:
+        chips.append(("Repetitive phrasing", "yellow"))
+    if n_words < 12:
+        chips.append(("Very short review", "yellow"))
+    if neg_hits > 0 and pos_hits > 0:
+        chips.append(("Pros and cons both stated", "green"))
+    if n_words >= 40:
+        chips.append((f"Detailed ({n_words} words)", "green"))
+    if not chips:
+        chips.append(("No promotional markers detected", "gray"))
+
+    return {
+        "n_words": n_words,
+        "exclaim": exclaim,
+        "generic_hits": generic_hits,
+        "incentive": incentive_hit,
+        "sentiment": sentiment,
+        "pos_hits": pos_hits,
+        "neg_hits": neg_hits,
+        "keywords": keywords,
+        "chips": chips,
+    }
+
+
+def behavior_chips_and_lines(feats, pop):
+    """Turn raw behavioral features into flagged chips + percentile-backed sentences."""
+    chips, lines = [], []
+
+    def pct(name, value):
+        return percentile_of(value, pop.get(name))
+
+    burst = feats["review_burst_7d"]
+    p = pct("review_burst_7d", burst)
+    if burst >= 7:
+        chips.append((f"High review burst ({burst}/7d)", "red"))
+        lines.append(f"• Peak of **{burst} reviews inside one 7-day window** — at or above the {p:.0f}th percentile of the 9,435 modeled reviewers.")
+    elif burst >= 4:
+        chips.append((f"Elevated review burst ({burst}/7d)", "yellow"))
+        lines.append(f"• Moderate burst of **{burst} reviews in 7 days** ({p:.0f}th percentile).")
+    else:
+        chips.append((f"Normal review frequency ({burst}/7d)", "gray"))
+
+    ratio = feats["burst_ratio_7d"]
+    if ratio >= 0.5:
+        chips.append((f"Burst dominates history ({ratio:.0%})", "red"))
+        lines.append(f"• **{ratio:.0%} of this reviewer's entire history** sits inside that single burst.")
+    elif ratio >= 0.3:
+        chips.append((f"Burst share {ratio:.0%}", "yellow"))
+
+    rv = feats["rating_variance"]
+    if rv <= 0.5:
+        chips.append((f"Low rating variance (σ²={rv:.2f})", "red"))
+        lines.append(f"• Ratings barely move (**variance {rv:.2f}**, {pct('rating_variance', rv):.0f}th percentile) — this reviewer almost never disagrees with themselves.")
+    elif rv >= 1.5:
+        chips.append((f"High rating variance (σ²={rv:.2f})", "gray"))
+        lines.append(f"• Ratings span the scale (**variance {rv:.2f}**, {pct('rating_variance', rv):.0f}th percentile) — typical of a critical, independent buyer.")
+
+    ent = feats["rating_entropy"]
+    if ent <= 0.5:
+        chips.append((f"Low star entropy ({ent:.2f})", "red"))
+        lines.append(f"• Star distribution is near-degenerate (**entropy {ent:.2f}**, {pct('rating_entropy', ent):.0f}th percentile) — almost every review lands in one bucket.")
+
+    rpd = feats["reviews_per_day"]
+    if rpd >= 0.3:
+        chips.append((f"High cadence ({rpd:.2f}/day)", "red"))
+        lines.append(f"• Sustained **{rpd:.2f} reviews per active day** ({pct('reviews_per_day', rpd):.0f}th percentile).")
+
+    adb = feats["avg_days_between_reviews"]
+    if adb <= 7:
+        chips.append((f"Only {adb:.0f} days between reviews", "yellow"))
+        lines.append(f"• Average gap between reviews is **{adb:.1f} days**, versus a modeled-population median of {np.median(pop['avg_days_between_reviews']):.0f} days.")
+
+    bi = feats["burst_intensity"]
+    if bi >= 3:
+        chips.append((f"High burst intensity ({bi:.1f})", "red"))
+        lines.append(f"• **burst_intensity = {bi:.1f}** — a large burst that also dominates the account's history.")
+
+    if len(chips) == 0:
+        chips.append(("No behavioral flag raised", "gray"))
+    return chips, lines
+
+
+def decision_engine(behavior_score, text_score, w_b, cold_start, behavior_chips, text_sig):
+    """Fuse the two signals and emit the on-spot justification.
+
+    Returns (final_score, status_label, badge_class, justification_lines).
+    Output is a *likelihood the review is truthful*, not a fake/genuine verdict.
+    """
+    lines = []
+    if behavior_score is not None and text_score is not None:
+        w_t = 1 - w_b
+        final = w_b * behavior_score + w_t * text_score
+        lines.append(f"• **Fusion:** Final = {w_b:.2f} × Behavior ({behavior_score:.1f}) + {w_t:.2f} × Text ({text_score:.1f}) = **{final:.1f}/100**.")
+    elif text_score is not None:
+        final = text_score
+        reason = ("reviewer has fewer than 3 reviews in the dataset"
+                  if cold_start else "no behavioral features were available")
+        lines.append(f"• **Fusion:** behavior signal skipped ({reason}) → Text Authenticity Score is taken **as-is, with no weighting**: Final = **{final:.1f}/100**.")
+    elif behavior_score is not None:
+        final = behavior_score
+        lines.append(f"• **Fusion:** review text missing → Behavior Score taken as-is: Final = **{final:.1f}/100**.")
+    else:
+        return None, "Insufficient data", "badge-gray", ["• Neither signal was available, so no score was produced."]
+
+    if behavior_score is not None and text_score is not None:
+        gap = abs(behavior_score - text_score)
+        if gap > 35:
+            hi, lo = ("behavioral", "textual") if behavior_score > text_score else ("textual", "behavioral")
+            lines.append(f"• **Conflicting signals** — the {lo} evidence is far weaker than the {hi} evidence (gap {gap:.0f} points). A single-module decision would have been wrong here; this is exactly the case a human should read.")
+        elif behavior_score >= 70 and text_score >= 70:
+            lines.append("• **Convergent genuine** — the reviewer's history and the writing both look normal, which is the strongest truthful case the system can make.")
+        elif behavior_score < 40 and text_score < 40:
+            lines.append("• **Convergent suspicious** — bursty/flat reviewing history *and* promotional language. This is the strongest manipulated case in the hybrid system.")
+        elif behavior_score < 50:
+            lines.append("• History is what drags the score down; the text itself is not the main concern.")
+        elif text_score < 50:
+            lines.append("• The writing is what drags the score down; the reviewer's history looks ordinary.")
+        else:
+            lines.append("• Both modules sit in the middle band — evidence is real but not strong enough to auto-label.")
+    elif text_score is not None and text_score < 40:
+        lines.append("• Text-only assessment, and the text alone is weak — promotional, generic or incentivized patterns dominate.")
+    elif text_score is not None and text_score >= 70:
+        lines.append("• Text-only assessment: the writing reads specific and balanced. No history-based cross-check was possible.")
+
+    if behavior_score is not None:
+        flagged = [c for c in behavior_chips if c[1] in ("red", "yellow")]
+        if flagged:
+            lines.append(f"• Behavioral flags raised: {', '.join(c[0] for c in flagged)}.")
+        else:
+            lines.append("• No individual behavioral feature crossed a warning threshold.")
+    if text_sig:
+        flagged_t = [c[0] for c in text_sig["chips"] if c[1] in ("red", "yellow")]
+        if flagged_t:
+            lines.append(f"• Linguistic markers: {'; '.join(flagged_t)}.")
+        else:
+            lines.append(f"• Linguistic markers: none of the promotional patterns were detected ({text_sig['n_words']} words, {text_sig['sentiment'].lower()} tone).")
+
+    status, cls = get_overall_status(final)
+    return final, status, cls, lines
+
+
+def badge_html(label, css_class):
+    """Span for the existing .badge CSS classes; accepts 'red' or 'badge-red'."""
+    if not css_class.startswith("badge-"):
+        css_class = "badge-" + css_class
+    return f'<span class="badge {css_class}">{label}</span>'
+
+
 def get_behavior_status(score):
     if score is None: return "Unavailable", "badge-gray"
     if score >= 75: return "Normal behavior", "badge-green"
@@ -515,42 +808,13 @@ def get_text_status(score):
     return "Highly suspicious", "badge-red"
 
 def get_overall_status(final):
+    """Likelihood bands — the output is *how likely the review is true*, never a
+    fake/genuine verdict."""
     if final is None: return "Insufficient data", "badge-gray"
-    if final >= 75: return "Likely genuine", "badge-green"
-    if final >= 55: return "Mixed / Needs review", "badge-blue"
+    if final >= 75: return "Most probably genuine", "badge-green"
+    if final >= 55: return "Needs to be reviewed manually", "badge-blue"
     if final >= 30: return "Suspicious", "badge-yellow"
     return "Highly suspicious", "badge-red"
-
-def final_explanation(behavior_score, text_score, final_score):
-    lines = []
-    if behavior_score is not None:
-        b_status, _ = get_behavior_status(behavior_score)
-        if behavior_score < 50:
-            lines.append(f"• Behavioral signal is **{b_status.lower()}** ({behavior_score:.1f}/100) — reviewer shows bursty or low-variance rating patterns.")
-        else:
-            lines.append(f"• Behavioral signal is **{b_status.lower()}** ({behavior_score:.1f}/100) — reviewing history looks typical.")
-    else:
-        lines.append("• Behavioral signal **unavailable** (insufficient history, <3 reviews). Assessment is text-only.")
-
-    if text_score is not None:
-        t_status, _ = get_text_status(text_score)
-        if text_score < 50:
-            lines.append(f"• Text signal is **{t_status.lower()}** ({text_score:.1f}/100) — language shows promotional / generic or incentivized patterns.")
-        else:
-            lines.append(f"• Text signal is **{t_status.lower()}** ({text_score:.1f}/100) — text appears specific and balanced.")
-    else:
-        lines.append("• Text signal unavailable.")
-
-    if behavior_score is not None and text_score is not None:
-        if abs(behavior_score - text_score) > 35:
-            lines.append("• **Conflicting signals** — one module flags suspicious while the other looks normal. Do not auto-label as fake; surface both scores for human review.")
-        elif behavior_score < 40 and text_score < 40:
-            lines.append("• **Convergent suspicious signals** — both behavior and text are low. This is the strongest suspicious case in the hybrid system.")
-        elif behavior_score > 70 and text_score > 70:
-            lines.append("• **Convergent genuine signals** — both modules agree on normality.")
-    if final_score is not None:
-        lines.append(f"• Final authenticity score blends both signals (weighted average). Use thresholds as **prototype decision rules**, not validated probabilities.")
-    return lines
 
 # ──────────────────────────────────────────────
 # Load all
@@ -558,6 +822,9 @@ def final_explanation(behavior_score, text_score, final_score):
 scaler, iso, score_scaler, behav_err = load_behavioral_models()
 nlp_model, tfidf, nlp_status, nlp_metrics = load_or_train_nlp()
 reviewer_df, behaviour_df = load_datasets()
+reviews_df = load_reviews()
+reviewer_lookup = reviewer_df.set_index("reviewerID") if reviewer_df is not None else None
+pop_stats = build_population_stats(reviewer_df) if reviewer_df is not None else {}
 
 # ──────────────────────────────────────────────
 # Sidebar
@@ -573,12 +840,16 @@ with st.sidebar:
     st.divider()
     page = st.radio(
         "Navigate",
-        ["🏠 Overview", "🏗️ Architecture", "📊 EDA & Insights", "🤖 Behavioral Model", "📝 NLP Module", "🔍 Hybrid Detection", "🔎 Reviewer Lookup"],
+        ["🏠 Overview", "🏗️ Architecture", "📊 EDA & Insights", "🤖 Behavioral Model", "📝 NLP Module", "🔍 Analyze Review", "🔎 Reviewer Lookup"],
         label_visibility="collapsed"
     )
     st.divider()
     # Model health
     st.markdown("**System Status**")
+    if reviews_df is not None:
+        st.success(f"Review dataset: {len(reviews_df):,} reviews loaded")
+    else:
+        st.error(f"Review dataset missing — expected {REVIEWS_PATH.name} in Dataset/")
     if behav_err:
         st.error(f"Behavioral model: error — {behav_err}")
     else:
@@ -825,14 +1096,14 @@ elif page == "🏗️ Architecture":
     st.markdown("#### Four Canonical Cases (Decision Engine)")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown('<div class="card" style="border-top: 4px solid #16A34A;"><b>Case 1: Both High</b><br>Behavior ≥70, Text ≥70<br><span class="badge badge-green">Likely genuine</span><br><small>Convergent genuine — strongest authentic case.</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card" style="border-top: 4px solid #16A34A;"><b>Case 1: Both High</b><br>Behavior ≥70, Text ≥70<br><span class="badge badge-green">Most probably genuine</span><br><small>Convergent genuine — strongest authentic case.</small></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown('<div class="card" style="border-top: 4px solid #DC2626;"><b>Case 2: Both Low</b><br>Behavior ≤40, Text ≤40<br><span class="badge badge-red">Highly suspicious</span><br><small>Convergent suspicious — strongest fake signal.</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card" style="border-top: 4px solid #DC2626;"><b>Case 2: Both Low</b><br>Behavior ≤40, Text ≤40<br><span class="badge badge-red">Highly suspicious</span><br><small>Convergent suspicious — strongest manipulated signal.</small></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown('<div class="card" style="border-top: 4px solid #F59E0B;"><b>Case 3: Behavior Low, Text High</b><br><span class="badge badge-yellow">Mixed</span><br><small>Bursty history but text looks genuine. Don’t auto-label fake.</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card" style="border-top: 4px solid #F59E0B;"><b>Case 3: Behavior Low, Text High</b><br><span class="badge badge-yellow">Suspicious</span><br><small>Bursty history but text looks genuine. Don’t auto-label.</small></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown('<div class="card" style="border-top: 4px solid #3B82F6;"><b>Case 4: Behavior High, Text Low</b><br><span class="badge badge-blue">Mixed</span><br><small>Normal history but text suspicious. Surface both.</small></div>', unsafe_allow_html=True)
-    st.info("Prototype rule: **Final = wB·Behavior + wT·Text** (default 0.5/0.5, tunable). Avoid claiming a threshold like 50 is scientifically optimal — treat thresholds as interpretable prototype rules until validated on labeled data.")
+        st.markdown('<div class="card" style="border-top: 4px solid #3B82F6;"><b>Case 4: Behavior High, Text Low</b><br><span class="badge badge-blue">Needs to be reviewed manually</span><br><small>Normal history but text suspicious. Surface both.</small></div>', unsafe_allow_html=True)
+    st.info("Prototype rule: **Final = wB·Behavior + wT·Text** (default 0.5/0.5, tunable). If the reviewer has **<3 reviews**, behavior is skipped and the Text Authenticity Score is used with no weight. Output is a likelihood the review is true — never a fake/genuine verdict.")
 
 # ──────────────────────────────────────────────
 # 📊 EDA & INSIGHTS
@@ -1021,7 +1292,7 @@ MinMaxScaler(0,100) ──► Behavior Score
     if behav_err:
         st.error(f"Cannot load behavioral models: {behav_err}")
     else:
-        st.success("Behavioral models loaded. Try a manual scoring below, or use Hybrid Detection / Reviewer Lookup.")
+        st.success("Behavioral models loaded. Try a manual scoring below, or use Analyze Review / Reviewer Lookup.")
         with st.expander("Try scoring with a sample reviewer (raw features)", expanded=False):
             c1, c2, c3, c4 = st.columns(4)
             with c1:
@@ -1163,236 +1434,337 @@ final = wB*behavior + wT*text   # wB+wT=1
 # ──────────────────────────────────────────────
 # 🔍 HYBRID DETECTION
 # ──────────────────────────────────────────────
-elif page == "🔍 Hybrid Detection":
-    st.markdown("### 🔍 Hybrid Detection — Live Demo")
-    st.markdown("Enter behavioral features (or leave blank for cold-start) **and** review text — the Decision Engine fuses both into a Final Authenticity Score with an explanation.")
+elif page == "🔍 Analyze Review":
+    st.markdown("### 🔍 Analyze Review — select a real review from the dataset")
+    st.markdown("""
+    Pick any review from **Amazon_Reviews_Combined_2000-2023.csv**. The app looks the reviewer up
+    in `reviewer_dataset.csv`, re-runs the behavioral pipeline live on their 7 features, scores the
+    review text with the NLP model, and fuses both signals in the Decision Engine.
+    The output is **how likely the review is true** — never a fake/genuine verdict.
+    """)
 
-    # Weights
-    with st.container():
-        cw1, cw2, cw3 = st.columns([1,1,2])
-        with cw1:
-            w_b = st.slider("Behavior weight (wB)", 0.0, 1.0, 0.5, 0.05)
-        with cw2:
-            w_t = 1 - w_b
-            st.metric("Text weight (wT)", f"{w_t:.2f}", delta="wB+wT=1", delta_color="off")
-        with cw3:
-            st.caption("Prototype: 0.5/0.5 is transparent and not claimed as optimal. Tune later on labeled validation data. Cold-start (behavior unavailable) falls back to text-only.")
-
-    st.divider()
-    # Input layout
-    left, right = st.columns(2, gap="large")
-    with left:
-        st.markdown("#### 1) Behavioral Signal")
-        st.caption("Provide the 7 raw features. If reviewer has <3 reviews, check ‘Insufficient history’ → behavior becomes unavailable (engine handles it).")
-        cold = st.checkbox("Insufficient history / new reviewer (<3 reviews) → behavior unavailable", value=False)
-        if not cold:
-            bc1, bc2 = st.columns(2)
-            with bc1:
-                i_rv = st.number_input("rating_variance", 0.0, 10.0, 0.20, 0.1, key="rv")
-                i_re = st.number_input("rating_entropy", 0.0, 3.0, 0.72, 0.05, key="re")
-                i_rpd = st.number_input("reviews_per_day", 0.0, 10.0, 0.0078, 0.0005, format="%.4f", key="rpd")
-                i_rb7 = st.number_input("review_burst_7d", 0, 100, 1, 1, key="rb7")
-            with bc2:
-                i_br = st.number_input("burst_ratio_7d", 0.0, 1.0, 0.20, 0.05, key="br")
-                i_adb = st.number_input("avg_days_between_reviews", 0.0, 5000.0, 150.0, 10.0, key="adb")
-                i_bi = st.number_input("burst_intensity", 0.0, 100.0, 0.20, 0.05, key="bi",
-                                       help="burst_intensity = review_burst_7d × burst_ratio_7d (computed if you leave as auto)")
-                # auto compute bi if mismatch?
-            # quick presets
-            st.markdown("**Presets:**")
-            pc1, pc2, pc3 = st.columns(3)
-            with pc1:
-                if st.button("Normal reviewer", use_container_width=True):
-                    st.session_state["rv"]=0.2; st.session_state["re"]=0.7; st.session_state["rpd"]=0.007; st.session_state["rb7"]=1; st.session_state["br"]=0.2; st.session_state["adb"]=150; st.session_state["bi"]=0.2
-                    st.rerun()
-            with pc2:
-                if st.button("Bursty suspicious", use_container_width=True):
-                    # high burst
-                    st.session_state["rv"]=0.0; st.session_state["re"]=0.0; st.session_state["rpd"]=0.35; st.session_state["rb7"]=15; st.session_state["br"]=0.75; st.session_state["adb"]=4; st.session_state["bi"]=11.25
-                    st.rerun()
-            with pc3:
-                if st.button("High variance", use_container_width=True):
-                    st.session_state["rv"]=2.8; st.session_state["re"]=1.9; st.session_state["rpd"]=0.003; st.session_state["rb7"]=1; st.session_state["br"]=0.12; st.session_state["adb"]=350; st.session_state["bi"]=0.12
-                    st.rerun()
-        else:
-            i_rv = i_re = i_rpd = i_rb7 = i_br = i_adb = i_bi = None
-
-    with right:
-        st.markdown("#### 2) Text Signal")
-        st.caption("Current review text (what the user is submitting). NLP model scores authenticity 0–100.")
-        if "hybrid_review_text" not in st.session_state:
-            st.session_state["hybrid_review_text"] = ""
-        review_text = st.text_area("Review text", key="hybrid_review_text", height=220, placeholder="Paste or type the review text here… e.g. “Love this! Well made, sturdy, and very comfortable. Great value!”\nOr: “I received a free copy in exchange for my honest review. Excellent!”\nOr: “The product arrived late and the stitching came loose after two washes. Average for the price.”")
-        st.markdown("**Quick examples:**")
-        ec1, ec2, ec3 = st.columns(3)
-        with ec1:
-            if st.button("Fake-like (promo)", use_container_width=True, key="ex1"):
-                st.session_state["hybrid_review_text"] = "Absolutely amazing! Perfect! Best purchase ever! Highly recommend to everyone! Excellent wonderful fantastic love it five stars!"
-                st.rerun()
-        with ec2:
-            if st.button("Genuine-like", use_container_width=True, key="ex2"):
-                st.session_state["hybrid_review_text"] = "I bought this for my kitchen and it works well for chopping, but the handle feels a bit cheap and the instructions were unclear. Overall okay for the price."
-                st.rerun()
-        with ec3:
-            if st.button("Incentivized", use_container_width=True, key="ex3"):
-                st.session_state["hybrid_review_text"] = "I received a free copy of this product in exchange for my honest review. I love the characters and the story was great, highly recommend!"
-                st.rerun()
-
-    st.divider()
-    # Score button
-    analyze = st.button("✨ Analyze Review (Hybrid)", type="primary", use_container_width=True)
-
-    # Compute on click
-    if analyze:
-        # Behavioral
-        behavior_score = None
-        behav_detail = None
-        if not cold:
-            if behav_err:
-                st.error(f"Behavioral model not loaded: {behav_err}")
-            else:
-                try:
-                    feats = dict(rating_variance=float(i_rv), rating_entropy=float(i_re), reviews_per_day=float(i_rpd),
-                                 review_burst_7d=int(i_rb7), burst_ratio_7d=float(i_br),
-                                 avg_days_between_reviews=float(i_adb), burst_intensity=float(i_bi))
-                    # auto-correct burst_intensity if user left inconsistent
-                    # (optional: recompute)
-                    # feats["burst_intensity"] = feats["review_burst_7d"] * feats["burst_ratio_7d"]
-                    res = score_reviewer_features(feats, scaler, iso, score_scaler)
-                    behavior_score = float(res["behavior_score"])
-                    behav_detail = res
-                except Exception as e:
-                    st.error(f"Behavior scoring error: {e}")
-        else:
-            behavior_score = None
-
-        # NLP
-        text_score = None
-        text_proba = None
-        text_label = None
-        if nlp_model is None or tfidf is None:
-            st.error("NLP model not available.")
-        else:
-            if not review_text or not review_text.strip():
-                st.warning("Please enter review text for NLP scoring (or leave behavior-only if testing).")
-                text_score = None
-            else:
-                ts, prob, label = score_text(review_text, nlp_model, tfidf)
-                if ts is None and label == "empty":
-                    st.warning("Review text is empty.")
-                elif ts is None:
-                    st.error(f"NLP scoring error: {label}")
-                else:
-                    text_score = float(ts)
-                    text_proba = float(prob)
-                    text_label = label
-
-        # Decision Engine
-        final_score = None
-        if behavior_score is not None and text_score is not None:
-            final_score = w_b * behavior_score + w_t * text_score
-        elif behavior_score is not None:
-            final_score = behavior_score
-        elif text_score is not None:
-            final_score = text_score
-
-        # Display results
-        st.markdown("### 📌 Results")
-        r1, r2, r3 = st.columns(3, gap="large")
-        with r1:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown("**Behavior Analysis**")
-            if behavior_score is None:
-                st.markdown('<span class="badge badge-gray">Unavailable — insufficient history</span>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:2rem; font-weight:800; color:#94A3B8;">—</div>', unsafe_allow_html=True)
-                st.caption("No behavioral score (cold-start). UI should say so rather than fabricating values. Engine falls back to text-only if available.")
-                if behav_detail:
-                    st.json(behav_detail)
-            else:
-                b_status, b_cls = get_behavior_status(behavior_score)
-                st.markdown(f'<span class="badge {b_cls}">{b_status}</span>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:2.2rem; font-weight:800; color:#FFFFFF;">{behavior_score:.1f} <span style="font-size:1rem; color:#94A3B8;">/ 100</span></div>', unsafe_allow_html=True)
-                st.progress(int(np.clip(behavior_score,0,100))/100)
-                st.caption(f"prediction={behav_detail['prediction']} (1=normal, -1=anomaly) • decision={behav_detail['decision_score']:.4f}")
-                st.markdown(f'<div class="insight-box" style="font-size:0.9rem;">High = normal behavior. This is <b>not</b> P(fake). Method: Isolation Forest decision_function → MinMax(0,100).</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with r2:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown("**Text Analysis**")
-            if text_score is None:
-                st.markdown('<span class="badge badge-gray">No text provided</span>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:2rem; font-weight:800; color:#94A3B8;">—</div>', unsafe_allow_html=True)
-                st.caption("Enter review text to get Text Authenticity Score.")
-            else:
-                t_status, t_cls = get_text_status(text_score)
-                st.markdown(f'<span class="badge {t_cls}">{t_status} • {text_label}</span>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:2.2rem; font-weight:800; color:#FFFFFF;">{text_score:.1f} <span style="font-size:1rem; color:#94A3B8;">/ 100</span></div>', unsafe_allow_html=True)
-                st.progress(int(np.clip(text_score,0,100))/100)
-                st.caption(f"P(genuine)={text_proba:.3f} • TF-IDF + LogisticRegression")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with r3:
-            st.markdown('<div class="card" style="border: 2px solid #334155;">', unsafe_allow_html=True)
-            st.markdown("**Final Assessment**")
-            if final_score is None:
-                st.markdown('<span class="badge badge-gray">Insufficient data</span>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:2rem; font-weight:800; color:#94A3B8;">—</div>', unsafe_allow_html=True)
-                st.caption("Need at least one signal.")
-            else:
-                o_status, o_cls = get_overall_status(final_score)
-                st.markdown(f'<span class="badge {o_cls}">{o_status}</span>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:2.4rem; font-weight:900; color:#FFFFFF;">{final_score:.1f} <span style="font-size:1rem; color:#94A3B8;">/ 100</span></div>', unsafe_allow_html=True)
-                st.progress(int(np.clip(final_score,0,100))/100)
-                if behavior_score is not None and text_score is not None:
-                    st.caption(f"Final = {w_b:.2f}×{behavior_score:.1f} + {w_t:.2f}×{text_score:.1f}")
-                elif behavior_score is not None:
-                    st.caption("Final = Behavior only (text unavailable)")
-                else:
-                    st.caption("Final = Text only (behavior unavailable / cold-start)")
-                # Avoid hard threshold
-                st.markdown('<div style="font-size:0.85rem; color:#94A3B8; margin-top:0.5rem;">Prototype thresholds: ≥75 likely genuine, 55–75 mixed, 30–55 suspicious, &lt;30 highly suspicious. Validate on labeled data before claiming optimality. Avoid <code>if &gt;50: genuine else fake</code> as final.</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Explanation
-        if final_score is not None or behavior_score is not None or text_score is not None:
-            st.markdown("#### 💬 Explanation")
-            for line in final_explanation(behavior_score, text_score, final_score):
-                st.markdown(line)
-            st.markdown("""
-            <div class="insight-box">
-            <b>How to present:</b> Always show <code>Behavior Score</code> + <code>Text Score</code> + <code>Final</code> + per-signal status + this explanation — not just a single number. If signals conflict, report “Mixed evidence” and surface both.
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Raw review display
-        if review_text:
-            st.markdown("#### 📝 Review")
-            st.info(f"“{review_text}”")
-
+    if reviews_df is None or reviewer_lookup is None:
+        st.error(f"Review dataset not found. Expected `Dataset/{REVIEWS_PATH.name}`.")
+    elif behav_err:
+        st.error(f"Behavioral model not loaded: {behav_err}")
     else:
-        st.info("👆 Configure inputs above and click **Analyze Review**. Try presets: Bursty suspicious + Fake-like promo (expect both low → highly suspicious) vs Normal + Genuine (expect both high → likely genuine) vs Mixed (bursty + genuine text) to demonstrate the hybrid value.")
+        # ── 1) Select a review ────────────────────────────────────
+        st.markdown("#### 🔎 Select a Review")
+        with st.container(border=True):
+            f1, f2, f3, f4 = st.columns([2.6, 1.1, 1.9, 1.0], gap="small")
+            with f1:
+                search = st.text_input("Search", "", placeholder="reviewerID, review title or product ASIN…")
+            with f2:
+                rating_filter = st.selectbox("Rating", RATING_OPTIONS, index=0)
+            with f3:
+                hist_filter = st.selectbox(
+                    "Reviewer history",
+                    ["All reviewers", "≥3 reviews — behavior available", "<3 reviews — text-only (cold-start)"],
+                )
+            with f4:
+                st.write("")
+                random_clicked = st.button("🎲 Random", use_container_width=True)
 
-    st.divider()
-    with st.expander("How Streamlit calls the modules (code)", expanded=False):
-        st.code("""
-# Behavioral (from behavorial_model_final.ipynb)
-# raw features → log1p → StandardScaler → Isolation Forest → MinMax 0-100
-features = {
-    "rating_variance": 0.2, "rating_entropy": 0.72, "reviews_per_day": 0.007,
-    "review_burst_7d": 1, "burst_ratio_7d": 0.2,
-    "avg_days_between_reviews": 150, "burst_intensity": 0.2  # = burst* ratio
-}
-result = score_reviewer(features, scaler, isolation_forest, score_scaler)
-# → {"prediction": 1, "decision_score": 0.19..., "behavior_score": 81.7...}
+        totals = reviewer_lookup["total_reviews"]
+        view = reviews_df
+        if search.strip():
+            s = search.strip().lower()
+            view = view[
+                view["reviewerID"].str.lower().str.contains(s, na=False)
+                | view["summary"].str.lower().str.contains(s, na=False)
+                | view["asin"].str.lower().str.contains(s, na=False)
+            ]
+        if rating_filter != "All ratings":
+            view = view[view["overall"] == int(rating_filter.split("★")[0])]
+        mapped = view["reviewerID"].map(totals)
+        if hist_filter.startswith("≥"):
+            view = view[mapped >= 3]
+        elif hist_filter.startswith("<"):
+            view = view[mapped.notna() & (mapped < 3)]
+        view = view.head(REVIEW_OPTIONS_CAP)
+        options = view["rid"].tolist()
 
-# NLP (TF-IDF + LogReg)
-text_score, p_genuine, label = score_text(review_text, nlp_model, tfidf)
-# → Text Score = P(genuine)*100, label in {"Genuine","Fake"}
+        if len(options) == 0:
+            st.warning("No reviews match these filters — widen the search or the rating/history choice.")
+        else:
+            label_map = {
+                r.rid: "{} · {}★ · “{}” · {}".format(
+                    r.reviewerID, int(r.overall), " ".join(r.summary.split())[:44] or "(no title)",
+                    r.reviewDate)
+                for r in view[["rid", "reviewerID", "overall", "summary", "reviewDate"]].itertuples()
+            }
 
-# Decision Engine
-final = w_behavior * behavior_score + w_text * text_score  # wB+wT=1
-        """, language="python")
+            def trim(lbl):
+                return lbl if len(lbl) <= 110 else lbl[:110] + "…"
+
+            # Options are the display strings themselves: a selectbox over range()
+            # hands back a str in session_state, which breaks index arithmetic.
+            label_to_rid = {}
+            for rid in options:
+                label_to_rid.setdefault(trim(label_map[rid]), int(rid))
+            labels = list(label_to_rid)
+
+            # Keying the widget to the filter set means a selection that no longer
+            # exists in the list can't survive in the browser as a phantom value.
+            pick_key = "review_pick|{}|{}|{}".format(search.strip(), rating_filter, hist_filter)
+
+            if random_clicked:
+                picked = int(np.random.default_rng().choice(np.array(options)))
+                st.session_state["pick_rid"] = picked
+                st.session_state[pick_key] = trim(label_map[picked])
+                st.session_state["analyzed"] = False
+
+            if pick_key in st.session_state and st.session_state[pick_key] not in label_to_rid:
+                del st.session_state[pick_key]
+
+            default_label = labels[0]
+            if "pick_rid" in st.session_state:
+                cand = trim(label_map.get(st.session_state["pick_rid"], "\u0000"))
+                if cand in label_to_rid:
+                    default_label = cand
+
+            with st.container(border=True):
+                st.markdown("**① Pick the review to analyze** — this dropdown is the selector; each entry starts with the `reviewerID`")
+                sel_label = st.selectbox("Choose a review from the dataset", labels,
+                                         index=labels.index(default_label), key=pick_key,
+                                         label_visibility="collapsed")
+                st.caption(f"{len(labels):,} reviews match the filters above (list capped at {REVIEW_OPTIONS_CAP}). "
+                           f"Full corpus: {len(reviews_df):,} reviews. 🎲 Random picks one from these {len(labels):,}.")
+            selected_rid = label_to_rid[sel_label]
+            review = view[view["rid"] == selected_rid].iloc[0]
+
+            if st.session_state.get("analyzed_rid") != selected_rid:
+                st.session_state["analyzed"] = False
+
+            # ── 2) Review information card ──────────────────────────
+            st.markdown("### 📄 ② Review Information")
+            reviewer_name = " ".join(str(review["reviewerName"]).split()).replace("_", "\\_").replace("*", "\\*")
+            with st.container(border=True):
+                ic1, ic2, ic3, ic4 = st.columns([1.9, 1.2, 0.85, 1.0])
+                with ic1:
+                    st.markdown(f"**Reviewer**\n\n{reviewer_name}")
+                with ic2:
+                    st.markdown(f"**Product (ASIN)**\n\n`{review['asin']}`")
+                with ic3:
+                    st.markdown(f"**Rating**\n\n{int(review['overall'])} / 5 {'⭐' * int(review['overall'])}")
+                with ic4:
+                    st.markdown(f"**Review date**\n\n{review['reviewDate']}")
+                if int(review["helpful_total"]) > 0:
+                    st.caption(f"👍 {int(review['helpful_votes'])} of {int(review['helpful_total'])} readers found this review helpful.")
+                else:
+                    st.caption("👍 No helpfulness votes recorded for this review yet.")
+                st.markdown("**Review title**")
+                st.markdown(f"“{review['summary'].strip() or '(no title)'}”")
+                st.markdown("**Review text**")
+                body = review["reviewText"].strip()
+                if len(body) > 900:
+                    st.info(body[:900] + " …")
+                    with st.expander(f"Show full review text ({len(body):,} characters)"):
+                        st.text(body)
+                else:
+                    st.info(body)
+
+            # ── 3) Decision Engine weight ───────────────────────────
+            wc1, wc2 = st.columns([1, 2])
+            with wc1:
+                w_b = st.slider("Behavior weight (wB)", 0.0, 1.0, 0.5, 0.05)
+            with wc2:
+                st.markdown("**③ Fusion rule**")
+                st.caption(f"Final = {w_b:.2f}·Behavior + {1 - w_b:.2f}·Text. If the reviewer has fewer than 3 reviews, the behavior branch is skipped entirely and the Text Authenticity Score is used with **no weighting**.")
+
+            analyze_clicked = st.button("🚀 Analyze Review", type="primary", use_container_width=True)
+            if analyze_clicked:
+                st.session_state["analyzed"] = True
+                st.session_state["analyzed_rid"] = selected_rid
+
+            if not st.session_state.get("analyzed"):
+                st.info("👆 Click **Analyze Review** to run the behavioral + NLP pipeline on this review.")
+            else:
+                # ── 4) Run the pipeline ─────────────────────────────
+                rid = review["reviewerID"]
+                rrow = reviewer_lookup.loc[[rid]] if rid in reviewer_lookup.index else None
+                total_reviews = int(rrow["total_reviews"].iloc[0]) if rrow is not None else 0
+                cold_start = total_reviews < 3
+
+                behavior_score = behav_detail = None
+                feats = None
+                if rrow is None:
+                    st.warning("This reviewerID is not present in `reviewer_dataset.csv` — no behavioral history could be retrieved.")
+                elif cold_start:
+                    feats = reviewer_features(rrow.iloc[0])
+                elif scaler is None or iso is None:
+                    st.error("Behavioral pipeline unavailable.")
+                else:
+                    feats = reviewer_features(rrow.iloc[0])
+                    behav_detail = score_reviewer_features(feats, scaler, iso, score_scaler)
+                    behavior_score = float(behav_detail["behavior_score"])
+
+                text_score = text_proba = text_label = None
+                text_sig = analyze_text_signals(review["reviewText"])
+                if nlp_model is None or tfidf is None:
+                    st.error("NLP model not available.")
+                else:
+                    ts, prob, label = score_text(review["reviewText"], nlp_model, tfidf)
+                    if ts is not None:
+                        text_score, text_proba, text_label = float(ts), float(prob), label
+
+                final_score, status_label, status_cls, justification = decision_engine(
+                    behavior_score, text_score, w_b, cold_start,
+                    behavior_chips_and_lines(feats, pop_stats)[0] if (feats and not cold_start) else [],
+                    text_sig,
+                )
+
+                # ── 5) Tabs ─────────────────────────────────────────
+                tab1, tab2, tab3 = st.tabs(["📄 Review Details", "📊 Behavioral Analysis", "🤖 Final Authenticity"])
+
+                with tab1:
+                    st.markdown("#### Selected review")
+                    with st.container(border=True):
+                        d1, d2, d3, d4, d5 = st.columns([1.7, 1.1, 0.75, 1.0, 0.9])
+                        with d1:
+                            st.markdown(f"**Reviewer**\n\n{reviewer_name}\n\n`{rid}`")
+                        with d2:
+                            st.markdown(f"**Product (ASIN)**\n\n`{review['asin']}`")
+                        with d3:
+                            st.markdown(f"**Rating**\n\n{int(review['overall'])} / 5 {'⭐' * int(review['overall'])}")
+                        with d4:
+                            st.markdown(f"**Review date**\n\n{review['reviewDate']}")
+                        with d5:
+                            st.markdown(f"**Found helpful**\n\n{int(review['helpful_votes'])} / {int(review['helpful_total'])}")
+                    st.markdown("#### Reviewer record (from `reviewer_dataset.csv`)")
+                    if rrow is None:
+                        st.markdown('<div class="chip">not present in the reviewer dataset</div>', unsafe_allow_html=True)
+                    else:
+                        with st.container(border=True):
+                            h1, h2 = st.columns([1, 1])
+                            with h1:
+                                st.markdown(f"- **Total reviews:** {total_reviews}\n"
+                                            f"- **Avg rating:** {rrow['avg_rating'].iloc[0]:.2f}\n"
+                                            f"- **Unique products:** {int(rrow['unique_products_reviewed'].iloc[0])}")
+                            with h2:
+                                st.markdown(f"- **First review:** {rrow['first_review'].iloc[0]}\n"
+                                            f"- **Last review:** {rrow['last_review'].iloc[0]}\n"
+                                            f"- **Status:** {'cold-start (<3 reviews)' if cold_start else 'modeled by Isolation Forest'}")
+                    st.markdown("#### Full review text")
+                    st.text(body)
+
+                with tab2:
+                    st.markdown("#### Card 1 — Behavior Analysis")
+                    with st.container(border=True):
+                        if cold_start or rrow is None:
+                            why = ("fewer than 3 reviews in the dataset" if rrow is not None else "absent from the reviewer dataset")
+                            st.markdown(f'<span class="badge badge-gray">Not qualified for behavior analysis</span>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="font-size:2rem; font-weight:800; color:#94A3B8;">— / 100</div>', unsafe_allow_html=True)
+                            st.markdown(f"""
+                            <div class="warning-box" style="margin-top:10px;">
+                            <b>Why:</b> this reviewer has <b>{total_reviews}</b> review(s) — {why}. Rating variance, star
+                            entropy and burst statistics are statistically meaningless on that little history, so the
+                            Isolation Forest is <b>not</b> run for them. The Decision Engine falls back to the text signal
+                            alone, and the final score below carries <b>no behavioral weight</b>.
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if feats:
+                                with st.expander("Raw features that would have been used"):
+                                    st.json(feats)
+                        else:
+                            b_status, b_cls = get_behavior_status(behavior_score)
+                            colB1, colB2 = st.columns([1, 2])
+                            with colB1:
+                                st.metric("Behavior Score", f"{behavior_score:.1f} / 100",
+                                          delta=f"{'anomaly' if behav_detail['prediction'] == -1 else 'normal'} · decision {behav_detail['decision_score']:+.3f}",
+                                          delta_color="off")
+                                st.markdown(badge_html(b_status, b_cls), unsafe_allow_html=True)
+                            with colB2:
+                                st.progress(int(np.clip(behavior_score, 0, 100)) / 100)
+                                st.caption("100 = behaves like a typical reviewer of the 9,435-reviewer modeled population; 0 = far outside it. This is NOT P(fake).")
+
+                            chips, blines = behavior_chips_and_lines(feats, pop_stats)
+                            st.markdown("**Main contributing features**")
+                            for label_txt, level in chips:
+                                st.markdown(badge_html(label_txt, level), unsafe_allow_html=True)
+                            st.markdown("**Justification from this reviewer's history**")
+                            for line in (blines or ["• No feature crossed a reporting threshold — history looks unremarkable on every axis."]):
+                                st.markdown(line)
+                            with st.expander("🧾 Reviewer behavioral summary (live values)", expanded=False):
+                                s1, s2, s3 = st.columns(3)
+                                with s1:
+                                    st.metric("Rating Variance", f"{feats['rating_variance']:.2f}")
+                                    st.metric("Reviews / Day", f"{feats['reviews_per_day']:.4f}")
+                                with s2:
+                                    st.metric("Rating Entropy", f"{feats['rating_entropy']:.2f}")
+                                    st.metric("Review Burst (7 days)", feats["review_burst_7d"])
+                                with s3:
+                                    st.metric("Avg Days Between", f"{feats['avg_days_between_reviews']:.1f}")
+                                    st.metric("Burst Intensity", f"{feats['burst_intensity']:.2f}")
+                            with st.expander("⚙️ How this score was produced (live re-run of the saved pipeline)", expanded=False):
+                                st.code(
+                                    "reviewerID {}  (total_reviews={})\n".format(rid, total_reviews)
+                                    + "  7 features from reviewer_dataset.csv → log1p(avg_days_between_reviews)\n"
+                                    + "  → StandardScaler.transform (scaler.pkl)\n"
+                                    + "  → IsolationForest.decision_function = {:.8f}   (n_estimators=200, contamination=0.02)\n".format(behav_detail["decision_score"])
+                                    + "  → MinMaxScaler(0,100) (score_scaler.pkl)\n"
+                                    + "  → Behavior Score = {:.5f}   prediction = {}".format(behavior_score, behav_detail["prediction"]),
+                                    language="text")
+                                if behaviour_df is not None:
+                                    stored = behaviour_df[behaviour_df["reviewerID"] == rid]
+                                    if len(stored):
+                                        sv = float(stored["behavior_score"].iloc[0])
+                                        st.caption(f"Stored in `Outputs/Behaviour Score.csv`: {sv:.5f} — live re-run differs by {abs(sv - behavior_score):.6f}. The pipeline is reproducible, not cached.")
+
+                with tab3:
+                    st.markdown("#### Card 2 — Text Analysis")
+                    with st.container(border=True):
+                        if text_score is None:
+                            st.markdown('<span class="badge badge-gray">Text unavailable</span>', unsafe_allow_html=True)
+                            st.caption("The NLP model could not score this review text.")
+                        else:
+                            t_status, t_cls = get_text_status(text_score)
+                            colT1, colT2 = st.columns([1, 2])
+                            with colT1:
+                                st.metric("Text Authenticity Score", f"{text_score:.1f} / 100",
+                                          delta=f"P(true)={text_proba:.3f}", delta_color="off")
+                                st.markdown(badge_html(f"{t_status} · model leans {text_label.lower()}", t_cls), unsafe_allow_html=True)
+                            with colT2:
+                                st.progress(int(np.clip(text_score, 0, 100)) / 100)
+                                st.caption(f"TF-IDF + Logistic Regression on {text_sig['n_words']} words · detected tone: {text_sig['sentiment']} ({text_sig['pos_hits']} positive / {text_sig['neg_hits']} negative cue words).")
+                            st.markdown("**Keywords detected**")
+                            for kw in text_sig["keywords"]:
+                                st.markdown(badge_html(kw, "gray"), unsafe_allow_html=True)
+                            st.markdown("**Linguistic markers**")
+                            for label_txt, level in text_sig["chips"]:
+                                st.markdown(badge_html(label_txt, level), unsafe_allow_html=True)
+
+                    st.markdown("#### Card 3 — Final Decision")
+                    with st.container(border=True):
+                        if final_score is None:
+                            st.markdown('<span class="badge badge-gray">Insufficient data</span>', unsafe_allow_html=True)
+                        else:
+                            color = {"badge-green": "#16A34A", "badge-blue": "#3B82F6",
+                                     "badge-yellow": "#F59E0B", "badge-red": "#DC2626"}.get(status_cls, "#94A3B8")
+                            colF1, colF2 = st.columns([1, 2])
+                            with colF1:
+                                st.markdown(f"""
+                                <div class="score-circle" style="border-color:{color};">
+                                    <div class="num" style="color:{color};">{final_score:.0f}</div>
+                                    <div class="lbl">/ 100 likely truthful</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            with colF2:
+                                st.markdown("**Overall Authenticity Score**")
+                                st.progress(int(np.clip(final_score, 0, 100)) / 100)
+                                st.markdown(badge_html(status_label, status_cls), unsafe_allow_html=True)
+                                st.markdown(f'<div style="font-size:0.85rem; color:#94A3B8; margin-top:8px;">Bands: ≥75 most probably genuine · 55–75 needs manual review · 30–55 suspicious · &lt;30 highly suspicious. Prototype thresholds, not validated probabilities.</div>', unsafe_allow_html=True)
+
+                    with st.expander("💡 Decision Engine justification", expanded=True):
+                        for line in justification:
+                            st.markdown(line)
+                        st.markdown("""
+                        <div class="insight-box" style="margin-top:10px;">
+                        <b>Reading the result:</b> the score states how strongly the available evidence supports this
+                        review being truthful. It is never a claim that the review <i>is</i> fake. Suspicious and
+                        needs-manual-review outcomes should route to a human, not an auto-takedown.
+                        </div>
+                        """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────
 # 🔎 REVIEWER LOOKUP
@@ -1405,48 +1777,30 @@ elif page == "🔎 Reviewer Lookup":
     else:
         # Merge for display
         merged = behaviour_df.merge(reviewer_df, on="reviewerID", how="left")
-        # Search
-        c1, c2 = st.columns([1, 0.35])
-        with c1:
-            query = st.text_input("Search reviewerID (exact or substring)", placeholder="e.g., A00473363TJ8YSZ3YAGG9 or A10E")
-        with c2:
-            top_n = st.number_input("Top N", 10, 500, 50, 10)
 
-        if query:
-            filt = merged[merged["reviewerID"].str.contains(query, case=False, na=False)]
-        else:
-            filt = merged
+        # ──  Dropdown of every modeled reviewer ────────────────────
+        st.markdown("#### ① Pick a reviewer")
+        ctx = {r.reviewerID: (float(r.behavior_score), int(r.total_reviews), int(r.prediction))
+               for r in merged[["reviewerID", "behavior_score", "total_reviews", "prediction"]].itertuples()}
+        all_ids = sorted(ctx)
 
-        # Filters
-        f1, f2, f3 = st.columns(3)
-        with f1:
-            p_filter = st.selectbox("Prediction", ["All", "Normal (1)", "Anomaly (-1)"])
-        with f2:
-            sort_by = st.selectbox("Sort by", ["behavior_score", "total_reviews", "reviews/day", "rating_variance", "review_burst_7d"])
-        with f3:
-            asc = st.checkbox("Ascending", value=(sort_by=="behavior_score"))
+        def id_label(rid):
+            bs, tr, pr = ctx[rid]
+            return f"{rid} · score {bs:.1f} · {tr} review{'s' if tr != 1 else ''} · {'normal' if pr == 1 else 'ANOMALY'}"
 
-        if p_filter == "Normal (1)":
-            filt = filt[filt["prediction"] == 1]
-        elif p_filter == "Anomaly (-1)":
-            filt = filt[filt["prediction"] == -1]
+        with st.container(border=True):
+            d0, d1 = st.columns([2.6, 1.0])
+            with d0:
+                sel_id = st.selectbox("Reviewer ID — type any part of the ID to filter the list",
+                                      all_ids, index=None, format_func=id_label,
+                                      placeholder="Start typing a reviewerID…")
+            with d1:
+                st.write("")
+                st.caption(f"{len(all_ids):,} modeled reviewers in the dropdown.")
 
-        filt = filt.sort_values(sort_by, ascending=asc).head(int(top_n))
-
-        st.dataframe(
-            filt[["reviewerID", "prediction", "behavior_score", "decision_score",
-                  "total_reviews", "avg_rating", "rating_variance", "rating_entropy",
-                  "reviews/day", "review_burst_7d", "burst_ratio_7d", "avg_days_between_reviews", "active_days"]],
-            use_container_width=True, height=420
-        )
-        st.caption(f"Showing {len(filt)} of {len(merged)} modeled reviewers. Anomalies = {len(merged[merged['prediction']==-1])} (2%). Behavior Score median {merged['behavior_score'].median():.1f}.")
-
-        # Detail for selected
-        st.divider()
-        st.markdown("#### Selected reviewer — rescore & explain")
-        sel_id = st.selectbox("Pick a reviewerID to inspect", filt["reviewerID"].tolist() if len(filt)>0 else [])
         if sel_id:
-            row = merged[merged["reviewerID"]==sel_id].iloc[0]
+            st.markdown("#### ② Selected reviewer — rescore & explain")
+            row = merged[merged["reviewerID"] == sel_id].iloc[0]
             cc1, cc2 = st.columns([1, 1])
             with cc1:
                 b_status, b_cls = get_behavior_status(row["behavior_score"])
@@ -1479,6 +1833,35 @@ elif page == "🔎 Reviewer Lookup":
                 <b>Interpretation:</b> Low behavior scores often show high <code>review_burst_7d</code> + high <code>burst_ratio</code> (large share of history in one burst) + high <code>reviews_per_day</code> + low <code>rating_variance/entropy</code>. Check the selected reviewer’s values against these.
                 </div>
                 """, unsafe_allow_html=True)
+
+        # ──  Browse / rank the whole modeled population ────────────
+        st.divider()
+        st.markdown("#### ③ Browse & rank all modeled reviewers")
+        b1, b2, b3, b4 = st.columns([1, 1.2, 0.6, 0.5])
+        with b1:
+            p_filter = st.selectbox("Prediction", ["All", "Normal (1)", "Anomaly (-1)"])
+        with b2:
+            sort_by = st.selectbox("Sort by", ["behavior_score", "total_reviews", "reviews/day", "rating_variance", "review_burst_7d"])
+        with b3:
+            asc = st.checkbox("Ascending", value=(sort_by=="behavior_score"))
+        with b4:
+            top_n = st.number_input("Top N", 10, 500, 50, 10)
+
+        filt = merged
+        if p_filter == "Normal (1)":
+            filt = filt[filt["prediction"] == 1]
+        elif p_filter == "Anomaly (-1)":
+            filt = filt[filt["prediction"] == -1]
+
+        filt = filt.sort_values(sort_by, ascending=asc).head(int(top_n))
+
+        st.dataframe(
+            filt[["reviewerID", "prediction", "behavior_score", "decision_score",
+                  "total_reviews", "avg_rating", "rating_variance", "rating_entropy",
+                  "reviews/day", "review_burst_7d", "burst_ratio_7d", "avg_days_between_reviews", "active_days"]],
+            use_container_width=True, height=420
+        )
+        st.caption(f"Showing {len(filt)} of {len(merged)} modeled reviewers. Anomalies = {len(merged[merged['prediction']==-1])} (2%). Behavior Score median {merged['behavior_score'].median():.1f}.")
 
         # Download
         st.divider()
